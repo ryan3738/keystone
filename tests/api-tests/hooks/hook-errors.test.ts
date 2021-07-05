@@ -1,7 +1,7 @@
 import { text } from '@keystone-next/fields';
 import { createSchema, list } from '@keystone-next/keystone/schema';
 import { setupTestRunner } from '@keystone-next/testing';
-import { apiTestConfig, expectAccessDenied, expectExtensionError } from '../utils';
+import { apiTestConfig, expectExtensionError } from '../utils';
 
 const runner = setupTestRunner({
   config: apiTestConfig({
@@ -393,15 +393,12 @@ const runner = setupTestRunner({
           query: `query ($id: ID!) { post(where: { id: $id }) { title content} }`,
           variables: { id: post.id },
         });
-        if (phase === 'before') {
-          expect(result.errors).toBe(undefined);
-          expect(result.data).toEqual({
-            post: { title: 'trigger before delete', content: 'trigger before delete' },
-          });
-        } else {
-          expectAccessDenied(result.errors, [{ path: ['post'] }]);
-          expect(result.data).toEqual({ post: null });
-        }
+        expect(result.errors).toBe(undefined);
+        expect(result.data).toEqual(
+          phase === 'before'
+            ? { post: { title: 'trigger before delete', content: 'trigger before delete' } }
+            : { post: null }
+        );
       })
     );
   });

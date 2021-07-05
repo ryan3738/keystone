@@ -1,7 +1,7 @@
 import { KeystoneContext, TypesForList, schema } from '@keystone-next/types';
 import { resolveUniqueWhereInput, UniqueInputFilter, UniquePrismaFilter } from '../where-inputs';
 import { InitialisedList } from '../types-for-lists';
-import { isRejected, isFulfilled } from '../utils';
+import { isRejected, isFulfilled, userInputError, systemError } from '../graphql-errors';
 import { NestedMutationState } from './create-update';
 
 type _CreateValueType = Exclude<
@@ -36,7 +36,7 @@ export function resolveRelateToManyForCreateInput(
 ) {
   return async (value: _CreateValueType) => {
     if (!Array.isArray(value.connect) && !Array.isArray(value.create)) {
-      throw new Error(
+      throw userInputError(
         `You must provide at least one field in to-many relationship inputs but none were provided at ${target}`
       );
     }
@@ -83,12 +83,12 @@ export function resolveRelateToManyForUpdateInput(
       !Array.isArray(value.disconnect) &&
       !Array.isArray(value.set)
     ) {
-      throw new Error(
+      throw userInputError(
         `You must provide at least one field in to-many relationship inputs but none were provided at ${target}`
       );
     }
     if (value.set && value.disconnect) {
-      throw new Error(
+      throw userInputError(
         `The set and disconnect fields cannot both be provided to to-many relationship inputs but both were provided at ${target}`
       );
     }
@@ -124,9 +124,9 @@ export function resolveRelateToManyForUpdateInput(
       ...setResult.filter(isRejected),
     ];
     if (errors.length) {
-      throw new Error(
-        `Unable to create, connect, disconnect and/or set ${errors.length} ${target}`
-      );
+      throw systemError([
+        `Unable to create, connect, disconnect and/or set ${errors.length} ${target}`,
+      ]);
     }
 
     return {

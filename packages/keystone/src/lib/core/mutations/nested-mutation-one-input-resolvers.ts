@@ -1,6 +1,7 @@
 import { KeystoneContext, TypesForList, schema } from '@keystone-next/types';
 import { resolveUniqueWhereInput } from '../where-inputs';
 import { InitialisedList } from '../types-for-lists';
+import { userInputError } from '../graphql-errors';
 import { NestedMutationState } from './create-update';
 
 type _CreateValueType = Exclude<
@@ -24,22 +25,24 @@ async function handleCreateAndUpdate(
   if (value.connect) {
     // Validate and resolve the input filter
     const uniqueWhere = await resolveUniqueWhereInput(value.connect, foreignList.fields, context);
-    // Check whether the item exists
+
+    // Check that the item exists and the user has read access to it (??)
     try {
-      await context.db.lists[foreignList.listKey].findOne({ where: value.connect });
-    } catch (err) {
+      const item = await context.db.lists[foreignList.listKey].findOne({ where: value.connect });
+      if (item === null) {
+        throw new Error(`Unable to connect a ${target}`);
+      }
+    } catch {
+      // E.g. if static access control means the foreign list doesn't support read at all
       throw new Error(`Unable to connect a ${target}`);
     }
+
     return { connect: uniqueWhere };
   } else if (value.create) {
     const createInput = value.create;
     let create = await (async () => {
-      try {
-        // Perform the nested create operation
-        return await nestedMutationState.create(createInput, foreignList);
-      } catch (err) {
-        throw new Error(`Unable to create a ${target}`);
-      }
+      // Any errors here will be surfaced under the `KS_RELATIONSHIP_ERROR`
+      return await nestedMutationState.create(createInput, foreignList);
     })();
 
     return { connect: { id: create.id } };
@@ -53,11 +56,9 @@ export function resolveRelateToOneForCreateInput(
   target: string
 ) {
   return async (value: _CreateValueType) => {
-    const numOfKeys = Object.keys(value).length;
-    if (numOfKeys !== 1) {
-      throw new Error(
-        `Nested to-one mutations must provide exactly one field if they're provided but ${target} did not`
-      );
+    // FIXME: Bad user input if disconnect or disconnectAll are supplied?
+    if (Object.keys(value).length !== 1) {
+      throw userInputError(`Relationship field ${target} accepts exactly one input value.`);
     }
     return handleCreateAndUpdate(value, nestedMutationState, context, foreignList, target);
   };
@@ -71,9 +72,7 @@ export function resolveRelateToOneForUpdateInput(
 ) {
   return async (value: _UpdateValueType) => {
     if (Object.keys(value).length !== 1) {
-      throw new Error(
-        `Nested to-one mutations must provide exactly one field if they're provided but ${target} did not`
-      );
+      throw userInputError(`Relationship field ${target} accepts exactly one input value.`);
     }
 
     if (value.connect || value.create) {

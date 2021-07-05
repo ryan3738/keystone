@@ -14,6 +14,7 @@ import {
 } from '@keystone-next/types';
 import { GraphQLInputObjectType } from 'graphql';
 import { coerceAndValidateForGraphQLInput } from '../coerceAndValidateForGraphQLInput';
+import { systemError } from './graphql-errors';
 import { InputFilter } from './where-inputs';
 
 export async function validateNonCreateListAccessControl<
@@ -31,27 +32,27 @@ export async function validateNonCreateListAccessControl<
 }): Promise<InputFilter | boolean> {
   const result = typeof access === 'function' ? await access(args) : access;
 
-  if (result === null || (typeof result !== 'object' && typeof result !== 'boolean')) {
-    throw new Error(
-      `Must return an object or boolean from Imperative or Declarative access control function. Got ${typeof result}`
-    );
-  }
-
   if (typeof result === 'object') {
+    // Declarative
     const internalSchema = args.context.sudo().graphql.schema;
     const whereInputType = internalSchema.getType(
       `${args.listKey}WhereInput`
     ) as GraphQLInputObjectType;
     const coercedResult = coerceAndValidateForGraphQLInput(internalSchema, whereInputType, result);
     if (coercedResult.kind === 'error') {
-      throw new Error(
-        `An invalid filter was provided in ${args.listKey}.access.${args.operation}: ${coercedResult.error.message}`
-      );
+      throw systemError([
+        `An invalid filter was provided in ${args.listKey}.access.${args.operation}: ${coercedResult.error.message}`,
+      ]);
     }
     return coercedResult.value;
+  } else if (typeof result === 'boolean') {
+    // Boolean
+    return result;
+  } else {
+    throw systemError([
+      `Must return an object or boolean from Imperative or Declarative access control function. Got ${typeof result}`,
+    ]);
   }
-
-  return result;
 }
 
 export async function validateCreateListAccessControl<Args extends { listKey: string }>({
@@ -64,11 +65,11 @@ export async function validateCreateListAccessControl<Args extends { listKey: st
   const result = typeof access === 'function' ? await access(args) : access;
 
   if (typeof result !== 'boolean') {
-    throw new Error(
+    throw systemError([
       `${
         args.listKey
-      }.access.create() must return a boolean but it got a ${typeof result}. (NOTE: 'create' cannot have a Declarative access control config)`
-    );
+      }.access.create() must return a boolean but it got a ${typeof result}. (NOTE: 'create' cannot have a Declarative access control config)`,
+    ]);
   }
 
   return result;
@@ -85,11 +86,11 @@ export async function validateFieldAccessControl<
 }) {
   let result = typeof access === 'function' ? await access(args) : access;
   if (typeof result !== 'boolean') {
-    throw new Error(
+    throw systemError([
       `Must return a Boolean from ${args.listKey}.fields.${args.fieldKey}.access.${
         args.operation
-      }(). Got ${typeof result}`
-    );
+      }(). Got ${typeof result}`,
+    ]);
   }
   return result;
 }

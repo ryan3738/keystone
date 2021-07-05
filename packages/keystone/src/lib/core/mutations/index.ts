@@ -30,6 +30,7 @@ export function getMutationsForList(list: InitialisedList, provider: DatabasePro
     },
   });
 
+  // FIXME: Should this exist on list.types?
   const createMany = schema.field({
     type: schema.list(list.types.output),
     args: {
@@ -53,6 +54,7 @@ export function getMutationsForList(list: InitialisedList, provider: DatabasePro
     },
   });
 
+  // FIXME: Should this exist on list.types?
   const updateManyInput = schema.inputObject({
     name: names.updateManyInputName,
     fields: {

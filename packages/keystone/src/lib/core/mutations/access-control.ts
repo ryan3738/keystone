@@ -8,12 +8,7 @@ import { accessDeniedError } from '../graphql-errors';
 import { mapUniqueWhereToWhere } from '../queries/resolvers';
 import { InitialisedList } from '../types-for-lists';
 import { runWithPrisma } from '../utils';
-import {
-  UniqueInputFilter,
-  PrismaFilter,
-  resolveWhereInput,
-  UniquePrismaFilter,
-} from '../where-inputs';
+import { resolveWhereInput, UniqueInputFilter, UniquePrismaFilter } from '../where-inputs';
 
 export async function getAccessControlledItemForDelete(
   list: InitialisedList,
@@ -22,22 +17,33 @@ export async function getAccessControlledItemForDelete(
   uniqueWhere: UniquePrismaFilter
 ): Promise<ItemRootValue> {
   const itemId = await getStringifiedItemIdFromUniqueWhereInput(uniqueInput, list.listKey, context);
+  const args = {
+    context,
+    itemId,
+    listKey: list.listKey,
+    operation: 'delete' as const,
+    session: context.session,
+  };
 
   // List access: pass 1
-  const access = await validateNonCreateListAccessControl({
+  const accessControl = await validateNonCreateListAccessControl({
     access: list.access.delete,
-    args: { context, listKey: list.listKey, operation: 'delete', session: context.session, itemId },
+    args,
   });
-  if (access === false) {
+  if (accessControl === false) {
     throw accessDeniedError();
   }
 
   // List access: pass 2
-  let where: PrismaFilter = mapUniqueWhereToWhere(list, uniqueWhere);
-  if (typeof access === 'object') {
-    where = { AND: [where, await resolveWhereInput(access, list)] };
+  let uniqueWhereInWhereForm = mapUniqueWhereToWhere(uniqueWhere);
+  if (typeof accessControl === 'object') {
+    uniqueWhereInWhereForm = {
+      AND: [uniqueWhereInWhereForm, await resolveWhereInput(accessControl, list)],
+    };
   }
-  const item = await runWithPrisma(context, list, model => model.findFirst({ where }));
+  const item = await runWithPrisma(context, list, model =>
+    model.findFirst({ where: uniqueWhereInWhereForm })
+  );
   if (item === null) {
     throw accessDeniedError();
   }
@@ -72,16 +78,16 @@ export async function getAccessControlledItemForUpdate(
   }
 
   // List access: pass 2
-  const uniqueWhereInWhereForm = mapUniqueWhereToWhere(list, uniqueWhere);
-  const item = await runWithPrisma(context, list, async model =>
-    model.findFirst({
-      where:
-        accessControl === true
-          ? uniqueWhereInWhereForm
-          : { AND: [uniqueWhereInWhereForm, await resolveWhereInput(accessControl, list)] },
-    })
+  let uniqueWhereInWhereForm = mapUniqueWhereToWhere(uniqueWhere);
+  if (typeof accessControl === 'object') {
+    uniqueWhereInWhereForm = {
+      AND: [uniqueWhereInWhereForm, await resolveWhereInput(accessControl, list)],
+    };
+  }
+  const item = await runWithPrisma(context, list, model =>
+    model.findFirst({ where: uniqueWhereInWhereForm })
   );
-  if (!item) {
+  if (item === null) {
     throw accessDeniedError();
   }
 
