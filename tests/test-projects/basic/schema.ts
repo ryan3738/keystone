@@ -25,4 +25,13 @@ export const lists = createSchema({
       tasks: relationship({ ref: 'Task.assignedTo', many: true }),
     },
   }),
+  SecretPlan: list({
+    fields: {
+      label: text(),
+      description: text(),
+    },
+    ui: {
+      isHidden: true,
+    },
+  }),
 });
